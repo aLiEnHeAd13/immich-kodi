@@ -38,6 +38,11 @@ class Album:
     isActivityEnabled: bool
     order: str
     lastModifiedAssetTimestamp: str
+    # Additional optional fields for API resilience
+    albumOrder: Optional[str] = None
+    isPinned: bool = False
+    timelineEnabled: bool = True
+    unknown_fields: Optional[dict] = None
 
     def __post_init__(self):
         if isinstance(self.owner, dict):
@@ -45,18 +50,28 @@ class Album:
         if isinstance(self.albumUsers, list):
             self.albumUsers = [AlbumUser(**user) for user in self.albumUsers]
 
+    @classmethod
+    def from_api_response(cls, data: dict) -> "Album":
+        """Create Album from API response, ignoring unknown fields."""
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        unknown = {k: v for k, v in data.items() if k not in known_fields}
+        if unknown:
+            filtered_data["unknown_fields"] = unknown
+        return cls(**filtered_data)
+
 
 @dataclass
 class ExifInfo:
-    make: str
-    model: str
-    exifImageWidth: int
-    exifImageHeight: int
-    fileSizeInByte: int
-    orientation: str
-    dateTimeOriginal: str
-    modifyDate: str
-    timeZone: str
+    make: Optional[str] = None
+    model: Optional[str] = None
+    exifImageWidth: Optional[int] = None
+    exifImageHeight: Optional[int] = None
+    fileSizeInByte: Optional[int] = None
+    orientation: Optional[str] = None
+    dateTimeOriginal: Optional[str] = None
+    modifyDate: Optional[str] = None
+    timeZone: Optional[str] = None
     lensModel: Optional[str] = None
     fNumber: Optional[float] = None
     focalLength: Optional[float] = None
@@ -67,9 +82,24 @@ class ExifInfo:
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
-    description: str = ""
+    description: Optional[str] = None
     projectionType: Optional[str] = None
     rating: Optional[int] = None
+    # Additional optional fields for API resilience
+    artist: Optional[str] = None
+    software: Optional[str] = None
+    copyright: Optional[str] = None
+    unknown_fields: Optional[dict] = None
+
+    @classmethod
+    def from_api_response(cls, data: dict) -> "ExifInfo":
+        """Create ExifInfo from API response, ignoring unknown fields."""
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        unknown = {k: v for k, v in data.items() if k not in known_fields}
+        if unknown:
+            filtered_data["unknown_fields"] = unknown
+        return cls(**filtered_data)
 
 
 @dataclass
@@ -94,7 +124,7 @@ class ItemAsset:
     visibility: str
     duration: str
     exifInfo: ExifInfo
-    libraryId: Optional[str] = None  # ← Added = None
+    libraryId: Optional[str] = None
     livePhotoVideoId: Optional[str] = None
     people: Optional[List[str]] = None
     checksum: Optional[str] = None
@@ -106,16 +136,49 @@ class ItemAsset:
     tags: Optional[List[str]] = None
     unassignedFaces: Optional[List[str]] = None
     stack: Optional[str] = None
+    # Additional fields from newer Immich API versions
+    width: Optional[int] = None
+    height: Optional[int] = None
+    thumbhashV2: Optional[str] = None
+    encodedVideoPath: Optional[str] = None
+    isExternal: bool = False
+    isReadOnly: bool = False
+    sidecarPath: Optional[str] = None
+    isVisible: bool = True
+    # Accept and ignore any additional fields from API
+    unknown_fields: Optional[dict] = None
 
     def __post_init__(self):
         if isinstance(self.exifInfo, dict):
-            self.exifInfo = ExifInfo(**self.exifInfo)
+            self.exifInfo = ExifInfo.from_api_response(self.exifInfo)
+
+    @classmethod
+    def from_api_response(cls, data: dict) -> "ItemAsset":
+        """Create ItemAsset from API response, ignoring unknown fields."""
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        unknown = {k: v for k, v in data.items() if k not in known_fields}
+        if unknown:
+            filtered_data["unknown_fields"] = unknown
+        return cls(**filtered_data)
 
 
 @dataclass
 class TimelineBucket:
     timeBucket: str
     count: int
+    # Additional optional fields for API resilience
+    unknown_fields: Optional[dict] = None
+
+    @classmethod
+    def from_api_response(cls, data: dict) -> "TimelineBucket":
+        """Create TimelineBucket from API response, ignoring unknown fields."""
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        unknown = {k: v for k, v in data.items() if k not in known_fields}
+        if unknown:
+            filtered_data["unknown_fields"] = unknown
+        return cls(**filtered_data)
 
 
 @dataclass

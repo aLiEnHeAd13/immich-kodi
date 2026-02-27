@@ -28,7 +28,7 @@ def list_albums():
     }
     conn.request("GET", "/api/albums", "", headers)
     res = json.loads(conn.getresponse().read().decode("utf-8"))
-    res = [Album(**i) for i in res]
+    res = [Album.from_api_response(i) for i in res]
 
     items = [
         (get_url(action="album", id=album.id), xbmcgui.ListItem(album.albumName), True)
@@ -57,7 +57,7 @@ def album(id):
     }
     conn.request("GET", f"/api/albums/{id}", "", headers)
     res = json.loads(conn.getresponse().read().decode("utf-8"))["assets"]
-    res = [ItemAsset(**i) for i in res]
+    res = [ItemAsset.from_api_response(i) for i in res]
 
     for i in res:
         if not i.exifInfo.dateTimeOriginal:
