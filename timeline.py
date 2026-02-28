@@ -56,7 +56,7 @@ def time(id, video):
 
     for id in res["id"]:
         item = get_asset_info(id)
-        item = ItemAsset(**item)
+        item = ItemAsset.from_api_response(item)
         if video and item.type == "IMAGE":
             continue
         if not item.exifInfo.dateTimeOriginal:
@@ -91,7 +91,7 @@ def timeline(video):
     }
     conn.request("GET", "/api/timeline/buckets?size=MONTH", "", headers)
     res = json.loads(conn.getresponse().read().decode("utf-8"))
-    res = [TimelineBucket(**i) for i in res]
+    res = [TimelineBucket.from_api_response(i) for i in res]
 
     xbmcplugin.setContent(HANDLE, "files")
 
