@@ -6,6 +6,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
+import iso8601
 from models import Album, ItemAsset
 from utils import (
     API_KEY,
@@ -37,7 +38,7 @@ def list_albums():
     for item, album in zip(items, res):
         if album.startDate:
             item[1].setDateTime(
-                datetime.fromisoformat(album.startDate).strftime("%Y-%m-%dT%H:%M:%SZ")
+                iso8601.parse_date(album.startDate).strftime("%Y-%m-%dT%H:%M:%SZ")
             )
         if album.albumThumbnailAssetId:
             item[1].setArt({"thumb": getThumbUrl(album.albumThumbnailAssetId)})
@@ -61,22 +62,22 @@ def album(id):
 
     for i in res:
         if not i.exifInfo.dateTimeOriginal:
-            i.exifInfo.dateTimeOriginal = datetime.fromisoformat(
+            i.exifInfo.dateTimeOriginal = iso8601.parse_date(
                 i.fileModifiedAt
             ).strftime("%Y-%m-%dT%H:%M:%S%z")
 
     items = [
         (
-            f"{RAW_SERVER_URL}/api/assets/{album.id}/original|x-api-key={API_KEY}",
-            xbmcgui.ListItem(get_asset_name(i)),
+            f"{RAW_SERVER_URL}/api/assets/{asset.id}/original|x-api-key={API_KEY}",
+            xbmcgui.ListItem(get_asset_name(asset)),
             False,
         )
-        for album in res
+        for asset in res
     ]
-    for item, album in zip(items, res):
-        item[1].setArt({"thumb": getThumbUrl(album.id)})
-        item[1].setProperty("MimeType", album.originalMimeType)
-        item[1].setDateTime(album.exifInfo.dateTimeOriginal)
+    for item, asset in zip(items, res):
+        item[1].setArt({"thumb": getThumbUrl(asset.id)})
+        item[1].setProperty("MimeType", asset.originalMimeType)
+        item[1].setDateTime(asset.exifInfo.dateTimeOriginal)
     xbmcplugin.addDirectoryItems(HANDLE, items, len(items))
     xbmcplugin.addSortMethod(HANDLE, sortMethod=xbmcplugin.SORT_METHOD_DATE)
     xbmcplugin.endOfDirectory(HANDLE, cacheToDisc=False)

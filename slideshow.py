@@ -6,6 +6,7 @@ import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
+import iso8601
 from utils import (
     API_KEY,
     HANDLE,
@@ -62,7 +63,7 @@ def slideshow():
             f"{RAW_SERVER_URL}/api/assets/{i['id']}/video/playback|x-api-key={API_KEY}",
             xbmcgui.ListItem(
                 strftime_polyfill(
-                    datetime.fromisoformat(i["localDateTime"][:-5]),
+                    iso8601.parse_date(i["localDateTime"][:-5]),
                     datelong + " " + timestamp,
                 )
             ),

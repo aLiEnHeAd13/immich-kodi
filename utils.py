@@ -8,6 +8,8 @@ import xbmcplugin
 from xbmcaddon import Addon
 from xbmcvfs import translatePath
 
+import iso8601
+
 HANDLE = int(sys.argv[1])
 
 RAW_SERVER_URL = xbmcplugin.getSetting(HANDLE, "immich_url")
@@ -51,13 +53,13 @@ def strftime_polyfill(dt: datetime, fmt: str):
 def get_asset_name(asset):
     if ASSET_NAMETYPE == 0:
         return strftime_polyfill(
-            datetime.fromisoformat(asset.localDateTime), datelong + " " + timestamp
+            iso8601.parse_date(asset.localDateTime), datelong + " " + timestamp
         )
     elif ASSET_NAMETYPE == 1:
         return asset.originalFileName
     else:
         return strftime_polyfill(
-            datetime.fromisoformat(asset.localDateTime), datelong + " " + timestamp
+            iso8601.parse_date(asset.localDateTime), datelong + " " + timestamp
         )
 
 
