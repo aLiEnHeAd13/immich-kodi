@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -105,9 +106,7 @@ class ExifInfo:
 @dataclass
 class ItemAsset:
     id: str
-    deviceAssetId: str
     ownerId: str
-    deviceId: str
     type: str
     originalPath: str
     originalFileName: str
@@ -160,6 +159,14 @@ class ItemAsset:
         unknown = {k: v for k, v in data.items() if k not in known_fields}
         if unknown:
             filtered_data["unknown_fields"] = unknown
+        # Newer Immich versions drop/rename fields: fill missing ones with None
+        for name in known_fields:
+            if name not in filtered_data and name != "unknown_fields":
+                f = cls.__dataclass_fields__[name]
+                if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING:
+                    filtered_data[name] = {} if name == "exifInfo" else None
+        if filtered_data.get("exifInfo") is None:
+            filtered_data["exifInfo"] = {}
         return cls(**filtered_data)
 
 

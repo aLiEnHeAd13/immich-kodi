@@ -1,4 +1,5 @@
 import http.client
+import json
 import sys
 from datetime import datetime
 from urllib.parse import urlencode, urlparse
@@ -53,13 +54,13 @@ def strftime_polyfill(dt: datetime, fmt: str):
 def get_asset_name(asset):
     if ASSET_NAMETYPE == 0:
         return strftime_polyfill(
-            iso8601.parse_date(asset.localDateTime), datelong + " " + timestamp
+            iso8601.parse_date(asset.localDateTime or asset.fileCreatedAt), datelong + " " + timestamp
         )
     elif ASSET_NAMETYPE == 1:
         return asset.originalFileName
     else:
         return strftime_polyfill(
-            iso8601.parse_date(asset.localDateTime), datelong + " " + timestamp
+            iso8601.parse_date(asset.localDateTime or asset.fileCreatedAt), datelong + " " + timestamp
         )
 
 
@@ -137,3 +138,54 @@ def get_url(**kwargs):
 
 def getThumbUrl(id):
     return f"{RAW_SERVER_URL}/api/assets/{id}/thumbnail|x-api-key={API_KEY}"
+
+
+def api_request(method, path, body=None):
+    """HTTP request against the Immich API. Returns (status, parsed_json_or_None).
+    Reconnects once if the persistent connection was dropped."""
+    headers = {
+        "Accept": "application/json",
+        "User-agent": xbmc.getUserAgent(),
+        "x-api-key": API_KEY,
+    }
+    payload = ""
+    if body is not None:
+        payload = json.dumps(body)
+        headers["Content-Type"] = "application/json"
+    for attempt in (0, 1):
+        try:
+            conn.request(method, path, payload, headers)
+            resp = conn.getresponse()
+            raw = resp.read().decode("utf-8")
+            break
+        except (http.client.HTTPException, OSError):
+            conn.close()
+            if attempt == 1:
+                raise
+    if resp.status >= 400:
+        xbmc.log("plugin.video.immich: %s %s -> HTTP %s: %s" % (method, path, resp.status, raw[:300]), xbmc.LOGERROR)
+    try:
+        return resp.status, (json.loads(raw) if raw else None)
+    except ValueError:
+        return resp.status, None
+
+
+def search_assets(**filters):
+    """Fetch all assets matching filters via POST /api/search/metadata
+    (works on Immich v2 and v3; falls back to /api/search/assets)."""
+    endpoint = "/api/search/metadata"
+    items = []
+    page = 1
+    while page:
+        body = dict(filters, page=page, size=1000, withExif=True)
+        status, res = api_request("POST", endpoint, body)
+        if status == 404 and endpoint == "/api/search/metadata":
+            endpoint = "/api/search/assets"
+            continue
+        if status >= 400 or not res:
+            raise Exception("Immich search failed (HTTP %s)" % status)
+        block = res.get("assets", {})
+        items.extend(block.get("items", []))
+        nxt = block.get("nextPage")
+        page = int(nxt) if nxt else 0
+    return items

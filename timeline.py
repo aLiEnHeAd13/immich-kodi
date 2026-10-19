@@ -6,6 +6,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
+import iso8601
 from models import ItemAsset, TimeBucket, TimelineBucket
 from utils import (
     API_KEY,
@@ -15,6 +16,7 @@ from utils import (
     get_playback,
     get_url,
     getThumbUrl,
+    search_assets,
     strftime_polyfill,
 )
 
@@ -39,42 +41,45 @@ def get_asset_info(id):
 def time(id, video):
     xbmcplugin.setContent(HANDLE, "images")
 
-    headers = {
-        "Accept": "application/json",
-        "User-agent": xbmc.getUserAgent(),
-        "x-api-key": API_KEY,
+    start = iso8601.parse_date(id).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    nxt = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    fmt = "%Y-%m-%dT%H:%M:%S.000Z"
+    filters = {
+        "takenAfter": start.strftime(fmt),
+        "takenBefore": nxt.strftime(fmt),
+        "visibility": "timeline",
     }
-    conn.request(
-        "GET",
-        "/api/timeline/bucket?size=MONTH&timeBucket=" + id,
-        "",
-        headers,
-    )
-    res = json.loads(conn.getresponse().read().decode("utf-8"))
+    if video:
+        filters["type"] = "VIDEO"
+
+    try:
+        assets = search_assets(**filters)
+    except Exception as e:
+        xbmc.log("plugin.video.immich: time() failed: %s" % e, xbmc.LOGERROR)
+        xbmcgui.Dialog().notification("Immich", str(e), xbmcgui.NOTIFICATION_ERROR)
+        xbmcplugin.endOfDirectory(HANDLE, succeeded=False)
+        return
 
     items = []
-
-    for id in res["id"]:
-        item = get_asset_info(id)
-        item = ItemAsset.from_api_response(item)
+    for raw in assets:
+        item = ItemAsset.from_api_response(raw)
         if video and item.type == "IMAGE":
             continue
-        if not item.exifInfo.dateTimeOriginal:
-            item.exifInfo.dateTimeOriginal = datetime.fromisoformat(
-                item.fileModifiedAt
-            ).strftime("%Y-%m-%dT%H:%M:%S%z")
-
-        items.append(
-            (
-                get_playback(item.id, item.type),
-                xbmcgui.ListItem(get_asset_name(item)),
-                False,
-            )
+        when = (
+            item.exifInfo.dateTimeOriginal
+            or item.fileModifiedAt
+            or item.fileCreatedAt
+            or item.localDateTime
         )
-        items[-1][1].setArt({"thumb": getThumbUrl(item.id)})
-        items[-1][1].setProperty("MimeType", item.originalMimeType)
-        items[-1][1].setDateTime(item.exifInfo.dateTimeOriginal.replace("Z", "+00:00"))
-        # itemsR.append(i)
+        li = xbmcgui.ListItem(get_asset_name(item))
+        li.setArt({"thumb": getThumbUrl(item.id)})
+        if item.originalMimeType:
+            li.setProperty("MimeType", item.originalMimeType)
+        if when:
+            li.setDateTime(
+                iso8601.parse_date(when).strftime("%Y-%m-%dT%H:%M:%S%z")
+            )
+        items.append((get_playback(item.id, item.type), li, False))
 
     xbmcplugin.addDirectoryItems(HANDLE, items, len(items))
     xbmcplugin.addSortMethod(HANDLE, sortMethod=xbmcplugin.SORT_METHOD_DATE)

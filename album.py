@@ -16,6 +16,7 @@ from utils import (
     get_asset_name,
     get_url,
     getThumbUrl,
+    search_assets,
 )
 
 HANDLE = int(sys.argv[1])
@@ -51,33 +52,32 @@ def list_albums():
 def album(id):
     xbmcplugin.setContent(HANDLE, "images")
 
-    headers = {
-        "Accept": "application/json",
-        "User-agent": xbmc.getUserAgent(),
-        "x-api-key": API_KEY,
-    }
-    conn.request("GET", f"/api/albums/{id}", "", headers)
-    res = json.loads(conn.getresponse().read().decode("utf-8"))["assets"]
-    res = [ItemAsset.from_api_response(i) for i in res]
+    try:
+        assets = search_assets(albumIds=[id])
+    except Exception as e:
+        xbmc.log("plugin.video.immich: album() failed: %s" % e, xbmc.LOGERROR)
+        xbmcgui.Dialog().notification("Immich", str(e), xbmcgui.NOTIFICATION_ERROR)
+        xbmcplugin.endOfDirectory(HANDLE, succeeded=False)
+        return
+    res = [ItemAsset.from_api_response(i) for i in assets]
 
-    for i in res:
-        if not i.exifInfo.dateTimeOriginal:
-            i.exifInfo.dateTimeOriginal = iso8601.parse_date(
-                i.fileModifiedAt
-            ).strftime("%Y-%m-%dT%H:%M:%S%z")
-
-    items = [
-        (
-            f"{RAW_SERVER_URL}/api/assets/{asset.id}/original|x-api-key={API_KEY}",
-            xbmcgui.ListItem(get_asset_name(asset)),
-            False,
+    items = []
+    for asset in res:
+        when = (
+            asset.exifInfo.dateTimeOriginal
+            or asset.fileModifiedAt
+            or asset.fileCreatedAt
+            or asset.localDateTime
         )
-        for asset in res
-    ]
-    for item, asset in zip(items, res):
-        item[1].setArt({"thumb": getThumbUrl(asset.id)})
-        item[1].setProperty("MimeType", asset.originalMimeType)
-        item[1].setDateTime(asset.exifInfo.dateTimeOriginal)
+        li = xbmcgui.ListItem(get_asset_name(asset))
+        li.setArt({"thumb": getThumbUrl(asset.id)})
+        if asset.originalMimeType:
+            li.setProperty("MimeType", asset.originalMimeType)
+        if when:
+            li.setDateTime(iso8601.parse_date(when).strftime("%Y-%m-%dT%H:%M:%S%z"))
+        items.append(
+            (f"{RAW_SERVER_URL}/api/assets/{asset.id}/original|x-api-key={API_KEY}", li, False)
+        )
     xbmcplugin.addDirectoryItems(HANDLE, items, len(items))
     xbmcplugin.addSortMethod(HANDLE, sortMethod=xbmcplugin.SORT_METHOD_DATE)
     xbmcplugin.endOfDirectory(HANDLE, cacheToDisc=False)
